@@ -42,6 +42,41 @@ adapters.forEach(function (adapter) {
       {name: 'Randall Leeds', commits: 9}
     ];
 
+    it.only('Bulk docs with allow_conflict=true', function(done) {
+      if (adapter === 'http') return done();
+
+      var db = new PouchDB(dbs.name);
+      var docId = "docId";
+      var rev1, rev2, rev3, rev2_;
+      // given
+      db.put({_id: docId, update:1}).then(function(result) {
+        rev1 = result.rev;
+        return db.put({_id: docId, update:2.1, _rev: rev1});
+      }).then(function(result) {
+        rev2 = result.rev;
+        return db.put({_id: docId, update:3, _rev:rev2});
+      })
+      // when
+      .then(function(result) {
+        rev3 = result.rev;
+        return db.put({_id: docId, update:2.2, _rev: rev1}, {allow_conflict: true});
+      })
+      // then
+      .then(function(result) {
+        rev2_ = result.rev;
+        should.exist(result.ok, 'update based on nonleaf revision');
+        return db.get(docId, {conflicts: true});
+      }).then(function(doc) {
+        doc._rev.should.equal(rev3, '');
+        const revConflict = doc._conflicts[0];
+        [rev1, rev2, rev3, rev2_, revConflict].forEach(function(rev) {
+          console.log(rev);
+        });
+        doc._conflicts.should.equal([rev2_]);
+        done();
+      }).catch(done);
+    });
+
     it('Testing bulk docs', function (done) {
       var db = new PouchDB(dbs.name);
       var docs = makeDocs(5);
